@@ -521,6 +521,11 @@ impl Commitment {
         let len = self.coeff.len() - zeros;
         self.coeff.truncate(len)
     }
+
+    /// Generates a non-redacted debug string
+    pub fn reveal(&self) -> String {
+        format!("Commitment {{ coeff: {:?} }}", self.coeff)
+    }
 }
 
 /// A symmetric bivariate polynomial in the prime field.
@@ -736,6 +741,16 @@ impl BivarCommitment {
     /// Returns the `0`-th to `degree`-th power of `x`.
     fn powers<T: IntoFr>(&self, x: T) -> Vec<Fr> {
         powers(x, self.degree)
+    }
+
+    /// Generates a non-redacted debug string. This method differs from the
+    /// `Debug` implementation in that it *does* leak the the struct's
+    /// internal state.
+    pub fn reveal(&self) -> String {
+        format!(
+            "BivarCommitment {{ degree: {}, coeff: {:?} }}",
+            self.degree, self.coeff
+        )
     }
 }
 
