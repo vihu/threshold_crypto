@@ -151,6 +151,11 @@ impl PublicKey {
         bytes.copy_from_slice(self.0.into_affine().into_compressed().as_ref());
         bytes
     }
+
+    /// Generates a non-redacted debug string.
+    pub fn reveal(&self) -> String {
+        format!("PublicKey({:?})", self.0)
+    }
 }
 
 /// A public key share.
@@ -877,6 +882,7 @@ mod tests {
         let sk_bob: SecretKey = random();
         let sk_eve: SecretKey = random();
         let pk_bob = sk_bob.public_key();
+        println!("pk_bob = {}", pk_bob.reveal());
         let msg = b"Muffins in the canteen today! Don't tell Eve!";
         let ciphertext = pk_bob.encrypt(&msg[..]);
         assert!(ciphertext.verify());
