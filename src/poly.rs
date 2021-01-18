@@ -581,6 +581,15 @@ impl BivarPoly {
         })
     }
 
+    /// Creates a polynomial where the 0th coeff is set to `secret`.
+    pub fn with_secret<T: IntoFr, R: Rng>(secret: T, degree: usize, rng: &mut R) -> Self {
+        let mut bipoly: BivarPoly = BivarPoly::random(degree, rng);
+        let mut coeff = bipoly.coeff.clone();
+        coeff[0] = secret.into_fr();
+        bipoly.coeff = coeff;
+        bipoly
+    }
+
     /// Creates a random polynomial.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
         let len = coeff_pos(degree, degree)
@@ -817,6 +826,15 @@ mod tests {
         }
         let interp = Poly::interpolate(samples);
         assert_eq!(interp, poly);
+    }
+
+    #[test]
+    fn bipoly_with_secret() {
+        let mut rng = rand::thread_rng();
+        let degree: usize = 3;
+        let secret: u64 = 42;
+        let bipoly_with_secret = BivarPoly::with_secret(secret, degree, &mut rng);
+        assert_eq!(secret.into_fr(), bipoly_with_secret.coeff[0])
     }
 
     #[test]
