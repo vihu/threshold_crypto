@@ -349,6 +349,14 @@ impl Poly {
         Poly::compute_interpolation(&samples)
     }
 
+    /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
+    /// `(x, f(x))`. Expects samples to be a vector of two tuple Field representation elements.
+    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self
+    {
+        Poly::compute_interpolation(&samples)
+    }
+
+
     /// Returns the degree.
     pub fn degree(&self) -> usize {
         self.coeff.len().saturating_sub(1)
@@ -513,6 +521,11 @@ impl Commitment {
         let len = self.coeff.len() - zeros;
         self.coeff.truncate(len)
     }
+
+    /// Generates a non-redacted debug string
+    pub fn reveal(&self) -> String {
+        format!("Commitment {{ coeff: {:?} }}", self.coeff)
+    }
 }
 
 /// A symmetric bivariate polynomial in the prime field.
@@ -566,6 +579,15 @@ impl BivarPoly {
                 degree, e
             )
         })
+    }
+
+    /// Creates a polynomial where the 0th coeff is set to `secret`.
+    pub fn with_secret<T: IntoFr, R: Rng>(secret: T, degree: usize, rng: &mut R) -> Self {
+        let mut bipoly: BivarPoly = BivarPoly::random(degree, rng);
+        let mut coeff = bipoly.coeff.clone();
+        coeff[0] = secret.into_fr();
+        bipoly.coeff = coeff;
+        bipoly
     }
 
     /// Creates a random polynomial.
@@ -729,6 +751,16 @@ impl BivarCommitment {
     fn powers<T: IntoFr>(&self, x: T) -> Vec<Fr> {
         powers(x, self.degree)
     }
+
+    /// Generates a non-redacted debug string. This method differs from the
+    /// `Debug` implementation in that it *does* leak the the struct's
+    /// internal state.
+    pub fn reveal(&self) -> String {
+        format!(
+            "BivarCommitment {{ degree: {}, coeff: {:?} }}",
+            self.degree, self.coeff
+        )
+    }
 }
 
 /// Returns the `0`-th to `degree`-th power of `x`.
@@ -794,6 +826,15 @@ mod tests {
         }
         let interp = Poly::interpolate(samples);
         assert_eq!(interp, poly);
+    }
+
+    #[test]
+    fn bipoly_with_secret() {
+        let mut rng = rand::thread_rng();
+        let degree: usize = 3;
+        let secret: u64 = 42;
+        let bipoly_with_secret = BivarPoly::with_secret(secret, degree, &mut rng);
+        assert_eq!(secret.into_fr(), bipoly_with_secret.coeff[0])
     }
 
     #[test]
