@@ -532,12 +532,13 @@ impl Commitment {
 ///
 /// This can be used for Verifiable Secret Sharing and Distributed Key Generation. See the module
 /// documentation for details.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BivarPoly {
     /// The polynomial's degree in each of the two variables.
     degree: usize,
     /// The coefficients of the polynomial. Coefficient `(i, j)` for `i <= j` is in position
     /// `j * (j + 1) / 2 + i`.
+    #[serde(with = "super::serde_impl::field_vec")]
     coeff: Vec<Fr>,
 }
 
