@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 
 use crate::G1;
+use crate::{IntoFr, Fr};
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -31,6 +32,27 @@ mod serialize_secret_internal {
         ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
             (*self).serialize_secret(serializer)
         }
+    }
+}
+
+/// A serializable wrapper for Fr
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+pub struct WireFr(
+    #[serde(with = "super::serde_impl::field_element")]
+    Fr
+);
+
+/// Allow converting WireFr to Fr
+impl IntoFr for WireFr {
+    fn into_fr(self) -> Fr {
+        self.0
+    }
+}
+
+impl WireFr {
+    /// Allow creating WireFr from Fr
+    pub fn from_fr(fr: Fr) -> WireFr {
+        WireFr(fr)
     }
 }
 
@@ -84,7 +106,7 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
     where
         D: Deserializer<'de>,
     {
-        use crate::{Fr, FrRepr};
+        use crate::FrRepr;
         use ff::PrimeField;
         use serde::de;
 
@@ -271,6 +293,52 @@ pub(crate) mod projective_vec {
     }
 }
 
+pub(crate) mod field_element {
+    use std::borrow::Borrow;
+
+    use ff::PrimeField;
+    use serde::de::Error as DeserializeError;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::{Fr, FrRepr};
+
+    /// A wrapper type to facilitate serialization and deserialization of field element.
+    pub struct FieldWrap<B>(pub B);
+
+    impl FieldWrap<Fr> {
+        /// Returns the wrapped field element.
+        pub fn into_inner(self) -> Fr {
+            self.0
+        }
+    }
+
+    impl<B: Borrow<Fr>> Serialize for FieldWrap<B> {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            self.0.borrow().into_repr().0.serialize(s)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for FieldWrap<Fr> {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            let repr = FrRepr(Deserialize::deserialize(d)?);
+            Ok(FieldWrap(Fr::from_repr(repr).map_err(|_| {
+                D::Error::custom("invalid field element representation")
+            })?))
+        }
+    }
+
+    pub fn serialize<S: Serializer>(fr: &Fr, s: S) -> Result<S::Ok, S::Error> {
+        let wrap_field: FieldWrap<&Fr> = FieldWrap(fr);
+        wrap_field.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Fr, D::Error> {
+        let wrap_field = <FieldWrap<Fr>>::deserialize(d)?;
+        Ok(wrap_field.into_inner())
+    }
+
+}
+
 /// Serialization and deserialization of vectors of field elements.
 pub(crate) mod field_vec {
     use std::borrow::Borrow;
@@ -413,6 +481,21 @@ mod tests {
 
             #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
             assert_eq!(ser_val.len(), 32);
+        }
+    }
+
+    #[test]
+    fn wire_fr() {
+        use crate::serde_impl::WireFr;
+        use super::IntoFr;
+
+        let samples = vec![-8, 0, 40, 136, 5, 628];
+        for &x in &samples {
+            let wire_fr: WireFr = WireFr::from_fr(x.into_fr());
+            let ser_fr = bincode::serialize(&wire_fr).expect("cannot serialize wire_fr");
+            let deser_fr: WireFr = bincode::deserialize(&ser_fr).expect("cannot deserialize wire_fr");
+            println!("y_int: {:?}, fr: {:?}, ser_fr: {:?}, deser_fr: {:?}", x, x.into_fr(), ser_fr, deser_fr.into_fr());
+            assert_eq!(x.into_fr(), deser_fr.into_fr());
         }
     }
 }
