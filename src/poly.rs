@@ -351,11 +351,9 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`. Expects samples to be a vector of two tuple Field representation elements.
-    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self
-    {
+    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self {
         Poly::compute_interpolation(&samples)
     }
-
 
     /// Returns the degree.
     pub fn degree(&self) -> usize {
@@ -710,6 +708,31 @@ impl BivarCommitment {
     /// Returns the polynomial's degree: It is the same in both variables.
     pub fn degree(&self) -> usize {
         self.degree
+    }
+
+    /// Here each entry is multiplied with corresponding entry in the other matrix
+    /// This is not normal matrix multiplication
+    /// It is assumed that both matrices are the same size
+    /// run the merge function on every matrix element
+    /// use a cartesian product to simplify the iteration
+    pub fn mul(&self, other: &BivarCommitment) -> BivarCommitment {
+        // only multiply commitments if they have the same degree
+        assert_eq!(self.degree, other.degree);
+
+        let new_coeffs: Vec<G1> = self
+            .coeff
+            .iter()
+            .zip(other.coeff.iter())
+            .map(|(lhe, rhe)| {
+                // remove these two lines and multiply `lhe` and `rhe` here
+                lhe * rhe
+            })
+            .collect();
+
+        BivarCommitment {
+            degree: self.degree,
+            coeff: new_coeffs,
+        }
     }
 
     /// Returns the commitment's value at the point `(x, y)`.
