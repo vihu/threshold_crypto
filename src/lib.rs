@@ -32,7 +32,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
-use core::ops::Add;
+use core::ops::{Add, AddAssign};
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective, EncodedPoint};
@@ -650,6 +650,14 @@ impl PublicKeySet {
         let g = interpolate(self.commit.degree(), samples)?;
         Ok(xor_with_hash(g, &ct.1))
     }
+
+    /// Combine two PublicKeySet into a single one (used from threshold generation)
+    pub fn combine(&self, other: PublicKeySet) -> PublicKeySet {
+        let mut commit = self.commit.clone();
+        commit.add_assign(&other.commit);
+        PublicKeySet{ commit }
+    }
+
 }
 
 /// A secret key and an associated set of secret key shares.
