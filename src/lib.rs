@@ -32,6 +32,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
+use core::ops::Add;
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective, EncodedPoint};
@@ -199,6 +200,14 @@ impl PublicKeyShare {
     pub fn to_bytes(&self) -> [u8; PK_SIZE] {
         self.0.to_bytes()
     }
+
+    /// Combines two public key shares to one (basically adds the two commitments)
+    pub fn combine(&self, other: PublicKeyShare) -> PublicKeyShare {
+        let mut commit = self.0.clone().0;
+        commit.add_assign(&other.0.clone().0);
+        PublicKeyShare(PublicKey(commit))
+    }
+
 }
 
 /// A signature.
@@ -423,6 +432,18 @@ impl Distribution<SecretKeyShare> for Standard {
 impl fmt::Debug for SecretKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SecretKeyShare").field(&DebugDots).finish()
+    }
+}
+
+/// Allow combining two `SecretKeyShare` together
+impl<'a, 'b> Add<&'b SecretKeyShare> for &'a SecretKeyShare {
+    type Output = SecretKeyShare;
+    fn add(self, other: &'b SecretKeyShare) -> SecretKeyShare {
+        let priv_key_1 = self.clone().0;
+        let priv_key_2 = &other.0;
+        let mut priv_key = priv_key_1.0;
+        priv_key.add_assign(&(priv_key_2.0));
+        SecretKeyShare(SecretKey(priv_key))
     }
 }
 
