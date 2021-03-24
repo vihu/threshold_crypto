@@ -33,6 +33,7 @@ use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
 use crate::into_fr::IntoFr;
 use crate::secret::clear_fr;
+use crate::PublicKey;
 use crate::{Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
@@ -525,6 +526,16 @@ impl Commitment {
     /// Generates a non-redacted debug string
     pub fn reveal(&self) -> String {
         format!("Commitment {{ coeff: {:?} }}", self.coeff)
+    }
+
+    /// Generates a public key from a commitment
+    pub fn public_key(&self) -> PublicKey {
+        let mut pub_key = self.coeff[0];
+        let length = self.coeff.len() as usize;
+        for i in 1..length {
+            pub_key.add_assign(&self.coeff[i]);
+        }
+        PublicKey(pub_key)
     }
 }
 
