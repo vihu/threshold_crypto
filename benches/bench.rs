@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
-use threshold_crypto::poly::Poly;
+use threshold_crypto::poly::{BivarCommitment, BivarPoly, Commitment, Poly};
 use threshold_crypto::Fr;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
@@ -89,6 +89,104 @@ mod poly_benches {
     }
 }
 
+mod commitment_benches {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
+
+    /// Benchmarks serialization of a univariate commitment
+    fn serialization(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "Commitment Serialization",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let poly = Poly::random(deg, &mut rng).commitment();
+                    poly
+                };
+                b.iter_with_setup(rand_factors, |p| {
+                    bincode::serialize(&p).expect("lhs boom ser")
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    /// Benchmarks deserialization of a univariate commitment
+    fn deserialization(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "Commitment Deserialization",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let poly = Poly::random(deg, &mut rng).commitment();
+                    let poly_ser = bincode::serialize(&poly).expect("lhs boom ser");
+                    poly_ser
+                };
+                b.iter_with_setup(rand_factors, |p| {
+                    bincode::deserialize::<Commitment>(&p).expect("lhs boom deser")
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    criterion_group! {
+        name = commitment_benches;
+        config = Criterion::default();
+        targets = serialization, deserialization,
+    }
+}
+
+mod bicommitment_benches {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
+
+    /// Benchmarks serialization of a bivariate commitment
+    fn serialization(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "BiCommitment Serialization",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let bipoly = BivarPoly::random(deg, &mut rng).commitment();
+                    bipoly
+                };
+                b.iter_with_setup(rand_factors, |b| {
+                    bincode::serialize(&b).expect("rhs boom ser")
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    /// Benchmarks deserialization of a bivariate commitment
+    fn deserialization(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "BiCommitment Deserialization",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let bipoly = BivarPoly::random(deg, &mut rng).commitment();
+                    let bipoly_ser = bincode::serialize(&bipoly).expect("rhs boom ser");
+                    bipoly_ser
+                };
+                b.iter_with_setup(rand_factors, |b| {
+                    bincode::deserialize::<BivarCommitment>(&b).expect("lhs boom deser")
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    criterion_group! {
+        name = bicommitment_benches;
+        config = Criterion::default();
+        targets = serialization, deserialization,
+    }
+}
+
 mod public_key_set_benches {
     use super::*;
     use rand::SeedableRng;
@@ -130,5 +228,7 @@ mod public_key_set_benches {
 
 criterion_main!(
     poly_benches::poly_benches,
-    public_key_set_benches::public_key_set_benches
+    public_key_set_benches::public_key_set_benches,
+    commitment_benches::commitment_benches,
+    bicommitment_benches::bicommitment_benches,
 );
