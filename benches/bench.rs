@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
-use threshold_crypto::poly::{BivarPoly, BivarCommitment, Commitment, Poly};
+use threshold_crypto::poly::{BivarCommitment, BivarPoly, Commitment, Poly};
 use threshold_crypto::Fr;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
@@ -101,17 +101,12 @@ mod commitment_benches {
             "Commitment [de]Serializiation",
             move |b, &&deg| {
                 let rand_factors = || {
-                    let lhs = Poly::random(deg, &mut rng).commitment();
-                    let rhs = Poly::random(deg, &mut rng).commitment();
-                    let lhs_ser = bincode::serialize(&lhs).expect("lhs boom ser");
-                    let rhs_ser = bincode::serialize(&rhs).expect("rhs boom ser");
-                    (lhs_ser, rhs_ser)
+                    let poly = Poly::random(deg, &mut rng).commitment();
+                    let poly_ser = bincode::serialize(&poly).expect("lhs boom ser");
+                    poly_ser
                 };
-                b.iter_with_setup(rand_factors, |(lhs, rhs)| {
-                    (
-                        bincode::deserialize::<Commitment>(&lhs).expect("lhs boom deser"),
-                        bincode::deserialize::<Commitment>(&rhs).expect("rhs boom deser"),
-                    )
+                b.iter_with_setup(rand_factors, |p| {
+                    bincode::deserialize::<Commitment>(&p).expect("lhs boom deser")
                 })
             },
             &TEST_DEGREES,
@@ -137,17 +132,12 @@ mod bicommitment_benches {
             "BiCommitment [de]Serializiation",
             move |b, &&deg| {
                 let rand_factors = || {
-                    let lhs = BivarPoly::random(deg, &mut rng).commitment();
-                    let rhs = BivarPoly::random(deg, &mut rng).commitment();
-                    let lhs_ser = bincode::serialize(&lhs).expect("lhs boom ser");
-                    let rhs_ser = bincode::serialize(&rhs).expect("rhs boom ser");
-                    (lhs_ser, rhs_ser)
+                    let bipoly = BivarPoly::random(deg, &mut rng).commitment();
+                    let bipoly_ser = bincode::serialize(&bipoly).expect("rhs boom ser");
+                    bipoly_ser
                 };
-                b.iter_with_setup(rand_factors, |(lhs, rhs)| {
-                    (
-                        bincode::deserialize::<BivarCommitment>(&lhs).expect("lhs boom deser"),
-                        bincode::deserialize::<BivarCommitment>(&rhs).expect("rhs boom deser"),
-                    )
+                b.iter_with_setup(rand_factors, |b| {
+                    bincode::deserialize::<BivarCommitment>(&b).expect("lhs boom deser")
                 })
             },
             &TEST_DEGREES,
