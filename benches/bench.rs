@@ -94,11 +94,11 @@ mod commitment_benches {
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
-    /// Benchmarks [de]ser of a univariate commitment
+    /// Benchmarks deserialization of a univariate commitment
     fn roundtrip(c: &mut Criterion) {
         let mut rng = XorShiftRng::from_seed(RNG_SEED);
         c.bench_function_over_inputs(
-            "Commitment [de]Serializiation",
+            "Commitment Deserializiation",
             move |b, &&deg| {
                 let rand_factors = || {
                     let poly = Poly::random(deg, &mut rng).commitment();
@@ -125,11 +125,11 @@ mod bicommitment_benches {
     use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
-    /// Benchmarks [de]ser of a univariate commitment
+    /// Benchmarks deserialization of a bivariate commitment
     fn roundtrip(c: &mut Criterion) {
         let mut rng = XorShiftRng::from_seed(RNG_SEED);
         c.bench_function_over_inputs(
-            "BiCommitment [de]Serializiation",
+            "BiCommitment Deserializiation",
             move |b, &&deg| {
                 let rand_factors = || {
                     let bipoly = BivarPoly::random(deg, &mut rng).commitment();
