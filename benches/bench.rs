@@ -134,7 +134,7 @@ mod bicommitment_benches {
     fn roundtrip(c: &mut Criterion) {
         let mut rng = XorShiftRng::from_seed(RNG_SEED);
         c.bench_function_over_inputs(
-            "Commitment [de]Serializiation",
+            "BiCommitment [de]Serializiation",
             move |b, &&deg| {
                 let rand_factors = || {
                     let lhs = BivarPoly::random(deg, &mut rng).commitment();
