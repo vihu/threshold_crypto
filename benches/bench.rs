@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use ff::Field;
-use threshold_crypto::poly::Poly;
+use threshold_crypto::poly::{BivarPoly, BivarCommitment, Commitment, Poly};
 use threshold_crypto::Fr;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
@@ -89,6 +89,78 @@ mod poly_benches {
     }
 }
 
+mod commitment_benches {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
+
+    /// Benchmarks [de]ser of a univariate commitment
+    fn roundtrip(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "Commitment [de]Serializiation",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let lhs = Poly::random(deg, &mut rng).commitment();
+                    let rhs = Poly::random(deg, &mut rng).commitment();
+                    let lhs_ser = bincode::serialize(&lhs).expect("lhs boom ser");
+                    let rhs_ser = bincode::serialize(&rhs).expect("rhs boom ser");
+                    (lhs_ser, rhs_ser)
+                };
+                b.iter_with_setup(rand_factors, |(lhs, rhs)| {
+                    (
+                        bincode::deserialize::<Commitment>(&lhs).expect("lhs boom deser"),
+                        bincode::deserialize::<Commitment>(&rhs).expect("rhs boom deser"),
+                    )
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    criterion_group! {
+        name = commitment_benches;
+        config = Criterion::default();
+        targets = roundtrip,
+    }
+}
+
+mod bicommitment_benches {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
+
+    /// Benchmarks [de]ser of a univariate commitment
+    fn roundtrip(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        c.bench_function_over_inputs(
+            "Commitment [de]Serializiation",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let lhs = BivarPoly::random(deg, &mut rng).commitment();
+                    let rhs = BivarPoly::random(deg, &mut rng).commitment();
+                    let lhs_ser = bincode::serialize(&lhs).expect("lhs boom ser");
+                    let rhs_ser = bincode::serialize(&rhs).expect("rhs boom ser");
+                    (lhs_ser, rhs_ser)
+                };
+                b.iter_with_setup(rand_factors, |(lhs, rhs)| {
+                    (
+                        bincode::deserialize::<BivarCommitment>(&lhs).expect("lhs boom deser"),
+                        bincode::deserialize::<BivarCommitment>(&rhs).expect("rhs boom deser"),
+                    )
+                })
+            },
+            &TEST_DEGREES,
+        );
+    }
+
+    criterion_group! {
+        name = bicommitment_benches;
+        config = Criterion::default();
+        targets = roundtrip,
+    }
+}
+
 mod public_key_set_benches {
     use super::*;
     use rand::SeedableRng;
@@ -130,5 +202,7 @@ mod public_key_set_benches {
 
 criterion_main!(
     poly_benches::poly_benches,
-    public_key_set_benches::public_key_set_benches
+    public_key_set_benches::public_key_set_benches,
+    commitment_benches::commitment_benches,
+    bicommitment_benches::bicommitment_benches,
 );
