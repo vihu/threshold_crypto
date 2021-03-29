@@ -210,6 +210,38 @@ impl PublicKeyShare {
 
 }
 
+/// A signature aggregate
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct AggregateSignature(Signature);
+
+impl AggregateSignature {
+    /// Construct a new AggregateSignature from a Vector of Signatures
+    pub fn from_sigs(sigs: &[Signature]) -> AggregateSignature {
+        let mut aggregate = sigs[0].0;
+
+        for i in 2..sigs.len() {
+            let next = sigs[i].0;
+            aggregate.add_assign(&next)
+        }
+
+        AggregateSignature(Signature(aggregate))
+    }
+
+    pub fn core_aggregate_verify<M: AsRef<[u8]>>(&self, pubkeys: &[PublicKey], msgs: &[M]) -> bool {
+        assert_eq!(pubkeys.len(), msgs.len());
+        let r = &self.0.0;
+        let mut c1 = G1Affine::one();
+
+        for i in 1..pubkeys.len() {
+            let x_p = pubkeys[i].0;
+            let q = hash_g2(msgs[i].as_ref());
+            let pairing = PEngine::pairing(x_p, q);
+        }
+
+        false
+    }
+}
+
 /// A signature.
 // Note: Random signatures can be generated for testing.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -1025,6 +1057,13 @@ mod tests {
         assert_eq!(pk, pk2);
         let sig2 = Signature::from_bytes(sig.to_bytes()).expect("invalid sig representation");
         assert_eq!(sig, sig2);
+    }
+
+    #[test]
+    fn test_aggregate_sig() {
+        let sks = (0u32..10).map(|_| SecretKey::random().sign("sign me")).collect::<Vec<_>>();
+        let agg_sig = AggregateSignature::from_sigs(&sks[..]);
+        println!("agg_sig: {:?}", agg_sig)
     }
 
     #[test]
