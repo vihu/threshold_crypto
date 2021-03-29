@@ -235,7 +235,7 @@ impl AggregateSignature {
         for i in 1..pubkeys.len() {
             let x_p = pubkeys[i].0;
             let q = hash_g2(msgs[i].as_ref());
-            PEngine::pairing(x_p, q)
+            let pairing = PEngine::pairing(x_p, q);
         }
 
         false
@@ -1061,14 +1061,8 @@ mod tests {
 
     #[test]
     fn test_aggregate_sig() {
-        let sk1: SecretKey = random();
-        let sig1 = sk1.sign("Please sign here: ______");
-
-        let sk2: SecretKey = random();
-        let sig2 = sk2.sign("Please sign here: ______");
-
-        let agg_sig = AggregateSignature::from_sigs(&[sig1, sig2]);
-
+        let sks = (0u32..10).map(|_| SecretKey::random().sign("sign me")).collect::<Vec<_>>();
+        let agg_sig = AggregateSignature::from_sigs(&sks[..]);
         println!("agg_sig: {:?}", agg_sig)
     }
 
