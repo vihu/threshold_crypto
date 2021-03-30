@@ -34,11 +34,9 @@ use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 use core::ops::{Add, AddAssign};
 
-use ff::Field;
 use group::{CurveAffine, CurveProjective, EncodedPoint};
 use hex_fmt::HexFmt;
 use log::debug;
-use pairing::Engine;
 use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -57,15 +55,6 @@ use util::sha3_256;
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
-
-#[cfg(feature = "use-insecure-test-only-mock-crypto")]
-pub use crate::mock::{
-    Mersenne8 as Fr, Mersenne8 as FrRepr, Mocktography as PEngine, Ms8Affine as G1Affine,
-    Ms8Affine as G2Affine, Ms8Projective as G1, Ms8Projective as G2, PK_SIZE, SIG_SIZE,
-};
-
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
-pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
 
 /// The size of a key's representation in bytes.
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]

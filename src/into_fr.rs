@@ -1,5 +1,4 @@
-use super::Fr;
-use ff::{Field, PrimeField};
+use bls12_381::Scalar as Fr;
 
 /// A conversion into an element of the field `Fr`.
 pub trait IntoFr: Copy {
@@ -15,7 +14,7 @@ impl IntoFr for Fr {
 
 impl IntoFr for u64 {
     fn into_fr(self) -> Fr {
-        Fr::from_repr(self.into()).expect("modulus is greater than u64::MAX")
+        self.into_fr()
     }
 }
 
@@ -30,9 +29,7 @@ impl IntoFr for i32 {
         if self >= 0 {
             (self as u64).into_fr()
         } else {
-            let mut result = ((-self) as u64).into_fr();
-            result.negate();
-            result
+            ((-self) as u64).into_fr()
         }
     }
 }
@@ -42,9 +39,7 @@ impl IntoFr for i64 {
         if self >= 0 {
             (self as u64).into_fr()
         } else {
-            let mut result = ((-self) as u64).into_fr();
-            result.negate();
-            result
+            ((-self) as u64).into_fr()
         }
     }
 }

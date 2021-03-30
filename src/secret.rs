@@ -1,9 +1,7 @@
 //! Utilities for working with secret values. This module includes functionality for overwriting
 //! memory with zeros.
 
-use zeroize::Zeroize;
-
-use crate::{Fr, FrRepr};
+use bls12_381::Scalar as Fr;
 
 /// Overwrites a single field element with zeros.
 pub(crate) fn clear_fr(fr: &mut Fr) {
