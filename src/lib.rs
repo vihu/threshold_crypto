@@ -13,7 +13,6 @@
 
 pub use ff;
 pub use group;
-pub use pairing;
 
 mod cmp_pairing;
 mod into_fr;
@@ -48,7 +47,7 @@ use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
 
-pub use crate::into_fr::IntoFr;
+use bls12_381::{Scalar, pairing, G1Projective, G1Affine, G2Affine};
 
 mod util;
 use util::sha3_256;
@@ -65,38 +64,26 @@ pub const PK_SIZE: usize = 48;
 pub const SIG_SIZE: usize = 96;
 
 /// A public key.
-#[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
-pub struct PublicKey(#[serde(with = "serde_impl::projective")] G1);
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct PublicKey(G1Projective);
 
 impl Hash for PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.into_affine().into_compressed().as_ref().hash(state);
+        G1Affine::from(self.0).to_compressed().as_ref().hash(state);
     }
 }
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let uncomp = self.0.into_affine().into_uncompressed();
+        let uncomp = G1Affine::from(self.0).to_compressed();
         write!(f, "PublicKey({:0.10})", HexFmt(uncomp))
-    }
-}
-
-impl PartialOrd for PublicKey {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
-    }
-}
-
-impl Ord for PublicKey {
-    fn cmp(&self, other: &Self) -> Ordering {
-        cmp_projective(&self.0, &other.0)
     }
 }
 
 impl PublicKey {
     /// Returns `true` if the signature matches the element of `G2`.
-    pub fn verify_g2<H: Into<G2Affine>>(&self, sig: &Signature, hash: H) -> bool {
-        PEngine::pairing(self.0, hash) == PEngine::pairing(G1Affine::one(), sig.0)
+    pub fn verify_g2(&self, sig: &Signature, hash: &G2Affine) -> bool {
+        pairing(&G1Affine::from(self.0), hash) == pairing(&G1Affine::identity(), sig.0)
     }
 
     /// Returns `true` if the signature matches the message.
