@@ -218,13 +218,13 @@ pub(crate) mod projective {
             type Value = C;
 
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                let len = <C::Affine as CurveAffine>::Compressed::size();
+                let len = <C::Affine as PrimeCurveAffine>::Compressed::size();
                 write!(f, "a tuple of size {}", len)
             }
 
             #[inline]
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<C, A::Error> {
-                let mut compressed = <C::Affine as CurveAffine>::Compressed::empty();
+                let mut compressed = <C::Affine as PrimeCurveAffine>::Compressed::empty();
                 for (i, byte) in compressed.as_mut().iter_mut().enumerate() {
                     let len_err = || DeserializeError::invalid_length(i, &self);
                     *byte = seq.next_element()?.ok_or_else(len_err)?;
@@ -234,7 +234,7 @@ pub(crate) mod projective {
             }
         }
 
-        let len = <C::Affine as CurveAffine>::Compressed::size();
+        let len = <C::Affine as PrimeCurveAffine>::Compressed::size();
         d.deserialize_tuple(len, TupleVisitor { _ph: PhantomData })
     }
 }

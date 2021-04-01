@@ -111,7 +111,7 @@ impl PublicKey {
 
     /// Returns the key with the given representation, if valid.
     pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let mut compressed: <G1Affine as CurveAffine>::Compressed = EncodedPoint::empty();
+        let mut compressed: <G1Affine as PrimeCurveAffine>::Compressed = EncodedPoint::empty();
         compressed.as_mut().copy_from_slice(bytes.borrow());
         let opt_affine = compressed.into_affine().ok();
         let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
@@ -230,7 +230,7 @@ impl Signature {
 
     /// Returns the signature with the given representation, if valid.
     pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let mut compressed: <G2Affine as CurveAffine>::Compressed = EncodedPoint::empty();
+        let mut compressed: <G2Affine as PrimeCurveAffine>::Compressed = EncodedPoint::empty();
         compressed.as_mut().copy_from_slice(bytes.borrow());
         let opt_affine = compressed.into_affine().ok();
         let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
@@ -1049,8 +1049,8 @@ mod tests {
 
     #[test]
     fn test_size() {
-        assert_eq!(<G1Affine as CurveAffine>::Compressed::size(), PK_SIZE);
-        assert_eq!(<G2Affine as CurveAffine>::Compressed::size(), SIG_SIZE);
+        assert_eq!(<G1Affine as PrimeCurveAffine>::Compressed::size(), PK_SIZE);
+        assert_eq!(<G2Affine as PrimeCurveAffine>::Compressed::size(), SIG_SIZE);
     }
 
     #[test]
