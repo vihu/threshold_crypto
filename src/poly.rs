@@ -24,24 +24,20 @@ use std::iter::repeat_with;
 use std::{cmp, iter, ops};
 
 use ff::Field;
-use group::{CurveAffine, CurveProjective};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
-use crate::into_fr::IntoFr;
 use crate::secret::clear_fr;
 use crate::PublicKey;
-use crate::{Fr, G1Affine, G1};
+use bls12_381::{Scalar, G1Projective, G1Affine};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Poly {
     /// The coefficients of a polynomial.
-    #[serde(with = "super::serde_impl::field_vec")]
-    pub(super) coeff: Vec<Fr>,
+    pub(super) coeff: Vec<Scalar>,
 }
 
 impl Zeroize for Poly {
@@ -71,7 +67,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
         let len = self.coeff.len();
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
-            self.coeff.resize(rhs_len, Fr::zero());
+            self.coeff.resize(rhs_len, Scalar::zero());
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             Field::add_assign(self_c, rhs_c);
@@ -97,10 +93,10 @@ impl<B: Borrow<Poly>> ops::Add<B> for Poly {
     }
 }
 
-impl<'a> ops::Add<Fr> for Poly {
+impl<'a> ops::Add<Scalar> for Poly {
     type Output = Poly;
 
-    fn add(mut self, rhs: Fr) -> Self::Output {
+    fn add(mut self, rhs: Scalar) -> Self::Output {
         if self.is_zero() && !rhs.is_zero() {
             self.coeff.push(rhs);
         } else {
@@ -124,7 +120,7 @@ impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
         let len = self.coeff.len();
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
-            self.coeff.resize(rhs_len, Fr::zero());
+            self.coeff.resize(rhs_len, Scalar::zero());
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             Field::sub_assign(self_c, rhs_c);
@@ -152,10 +148,10 @@ impl<B: Borrow<Poly>> ops::Sub<B> for Poly {
 
 // Clippy thinks using `+` in a `Sub` implementation is suspicious.
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a> ops::Sub<Fr> for Poly {
+impl<'a> ops::Sub<Scalar> for Poly {
     type Output = Poly;
 
-    fn sub(self, mut rhs: Fr) -> Self::Output {
+    fn sub(self, mut rhs: Scalar) -> Self::Output {
         rhs.negate();
         self + rhs
     }
@@ -180,8 +176,8 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
             return Poly::zero();
         }
         let n_coeffs = self.coeff.len() + rhs.coeff.len() - 1;
-        let mut coeffs = vec![Fr::zero(); n_coeffs];
-        let mut tmp = Fr::zero();
+        let mut coeffs = vec![Scalar::zero(); n_coeffs];
+        let mut tmp = Scalar::zero();
         for (i, ca) in self.coeff.iter().enumerate() {
             for (j, cb) in rhs.coeff.iter().enumerate() {
                 tmp = *ca;
@@ -208,8 +204,8 @@ impl<B: Borrow<Self>> ops::MulAssign<B> for Poly {
     }
 }
 
-impl ops::MulAssign<Fr> for Poly {
-    fn mul_assign(&mut self, rhs: Fr) {
+impl ops::MulAssign<Scalar> for Poly {
+    fn mul_assign(&mut self, rhs: Scalar) {
         if rhs.is_zero() {
             self.zeroize();
             self.coeff.clear();
@@ -221,10 +217,10 @@ impl ops::MulAssign<Fr> for Poly {
     }
 }
 
-impl<'a> ops::Mul<&'a Fr> for Poly {
+impl<'a> ops::Mul<&'a Scalar> for Poly {
     type Output = Poly;
 
-    fn mul(mut self, rhs: &Fr) -> Self::Output {
+    fn mul(mut self, rhs: &Scalar) -> Self::Output {
         if rhs.is_zero() {
             self.zeroize();
             self.coeff.clear();
@@ -235,27 +231,27 @@ impl<'a> ops::Mul<&'a Fr> for Poly {
     }
 }
 
-impl ops::Mul<Fr> for Poly {
+impl ops::Mul<Scalar> for Poly {
     type Output = Poly;
 
-    fn mul(self, rhs: Fr) -> Self::Output {
+    fn mul(self, rhs: Scalar) -> Self::Output {
         let rhs = &rhs;
         self * rhs
     }
 }
 
-impl<'a> ops::Mul<&'a Fr> for &'a Poly {
+impl<'a> ops::Mul<&'a Scalar> for &'a Poly {
     type Output = Poly;
 
-    fn mul(self, rhs: &Fr) -> Self::Output {
+    fn mul(self, rhs: &Scalar) -> Self::Output {
         (*self).clone() * rhs
     }
 }
 
-impl<'a> ops::Mul<Fr> for &'a Poly {
+impl<'a> ops::Mul<Scalar> for &'a Poly {
     type Output = Poly;
 
-    fn mul(self, rhs: Fr) -> Self::Output {
+    fn mul(self, rhs: Scalar) -> Self::Output {
         (*self).clone() * rhs
     }
 }
@@ -270,8 +266,8 @@ impl ops::Mul<u64> for Poly {
 
 /// Creates a new `Poly` instance from a vector of prime field elements representing the
 /// coefficients of the polynomial.
-impl From<Vec<Fr>> for Poly {
-    fn from(coeff: Vec<Fr>) -> Self {
+impl From<Vec<Scalar>> for Poly {
+    fn from(coeff: Vec<Scalar>) -> Self {
         Poly { coeff }
     }
 }
@@ -294,7 +290,7 @@ impl Poly {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
         }
-        let coeff: Vec<Fr> = repeat_with(|| Fr::random(rng)).take(degree + 1).collect();
+        let coeff: Vec<Scalar> = repeat_with(|| Scalar::random(rng)).take(degree + 1).collect();
         Ok(Poly::from(coeff))
     }
 
@@ -310,11 +306,11 @@ impl Poly {
 
     /// Returns the polynomial with constant value `1`.
     pub fn one() -> Self {
-        Poly::constant(Fr::one())
+        Poly::constant(Scalar::one())
     }
 
     /// Returns the polynomial with constant value `c`.
-    pub fn constant(mut c: Fr) -> Self {
+    pub fn constant(mut c: Scalar) -> Self {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
         // heap as part of the vector of polynomial coefficients.
@@ -330,9 +326,9 @@ impl Poly {
 
     /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn monomial(degree: usize) -> Self {
-        let coeff: Vec<Fr> = iter::repeat(Fr::zero())
+        let coeff: Vec<Scalar> = iter::repeat(Scalar::zero())
             .take(degree)
-            .chain(iter::once(Fr::one()))
+            .chain(iter::once(Scalar::one()))
             .collect();
         Poly::from(coeff)
     }
@@ -342,17 +338,17 @@ impl Poly {
     pub fn interpolate<T, U, I>(samples_repr: I) -> Self
     where
         I: IntoIterator<Item = (T, U)>,
-        T: IntoFr,
-        U: IntoFr,
+        T: Into<Scalar>,
+        U: Into<Scalar>,
     {
         let convert = |(x, y): (T, U)| (x.into_fr(), y.into_fr());
-        let samples: Vec<(Fr, Fr)> = samples_repr.into_iter().map(convert).collect();
+        let samples: Vec<(Scalar, Scalar)> = samples_repr.into_iter().map(convert).collect();
         Poly::compute_interpolation(&samples)
     }
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`. Expects samples to be a vector of two tuple Field representation elements.
-    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self
+    pub fn interpolate_from_fr(samples: Vec<(Scalar, Scalar)>) -> Self
     {
         Poly::compute_interpolation(&samples)
     }
@@ -364,9 +360,9 @@ impl Poly {
     }
 
     /// Returns the value at the point `i`.
-    pub fn evaluate<T: IntoFr>(&self, i: T) -> Fr {
+    pub fn evaluate<T: Into<Scalar>>(&self, i: T) -> Scalar {
         let mut result = match self.coeff.last() {
-            None => return Fr::zero(),
+            None => return Scalar::zero(),
             Some(c) => *c,
         };
         let x = i.into_fr();
@@ -379,7 +375,7 @@ impl Poly {
 
     /// Returns the corresponding commitment.
     pub fn commitment(&self) -> Commitment {
-        let to_g1 = |c: &Fr| G1Affine::one().mul(*c);
+        let to_g1 = |c: &Scalar| G1Affine::one().mul(*c);
         Commitment {
             coeff: self.coeff.iter().map(to_g1).collect(),
         }
@@ -394,7 +390,7 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
-    fn compute_interpolation(samples: &[(Fr, Fr)]) -> Self {
+    fn compute_interpolation(samples: &[(Scalar, Scalar)]) -> Self {
         if samples.is_empty() {
             return Poly::zero();
         }
@@ -403,7 +399,7 @@ impl Poly {
         let mut minus_s0 = samples[0].0;
         minus_s0.negate();
         // Is zero on the first `i` samples.
-        let mut base = Poly::from(vec![minus_s0, Fr::one()]);
+        let mut base = Poly::from(vec![minus_s0, Scalar::one()]);
 
         // We update `base` so that it is always zero on all previous samples, and `poly` so that
         // it has the correct values on the previous samples.
@@ -420,7 +416,7 @@ impl Poly {
             // Finally, multiply `base` by X - x, so that it is zero at `x`, too, now.
             let mut minus_x = *x;
             minus_x.negate();
-            base *= Poly::from(vec![minus_x, Fr::one()]);
+            base *= Poly::from(vec![minus_x, Scalar::one()]);
         }
         poly
     }
@@ -437,8 +433,7 @@ impl Poly {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Commitment {
     /// The coefficients of the polynomial.
-    #[serde(with = "super::serde_impl::projective_vec")]
-    pub(super) coeff: Vec<G1>,
+    pub(super) coeff: Vec<G1Projective>,
 }
 
 impl PartialOrd for Commitment {
@@ -471,7 +466,7 @@ impl Hash for Commitment {
 impl<B: Borrow<Commitment>> ops::AddAssign<B> for Commitment {
     fn add_assign(&mut self, rhs: B) {
         let len = cmp::max(self.coeff.len(), rhs.borrow().coeff.len());
-        self.coeff.resize(len, G1::zero());
+        self.coeff.resize(len, G1Projective::zero());
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             self_c.add_assign(rhs_c);
         }
@@ -503,9 +498,9 @@ impl Commitment {
     }
 
     /// Returns the `i`-th public key share.
-    pub fn evaluate<T: IntoFr>(&self, i: T) -> G1 {
+    pub fn evaluate<T: Into<Scalar>>(&self, i: T) -> G1Projective {
         let mut result = match self.coeff.last() {
-            None => return G1::zero(),
+            None => return G1Projective::zero(),
             Some(c) => *c,
         };
         let x = i.into_fr();
@@ -549,8 +544,7 @@ pub struct BivarPoly {
     degree: usize,
     /// The coefficients of the polynomial. Coefficient `(i, j)` for `i <= j` is in position
     /// `j * (j + 1) / 2 + i`.
-    #[serde(with = "super::serde_impl::field_vec")]
-    coeff: Vec<Fr>,
+    coeff: Vec<Scalar>,
 }
 
 impl Zeroize for BivarPoly {
@@ -594,7 +588,7 @@ impl BivarPoly {
     }
 
     /// Creates a polynomial where the 0th coeff is set to `secret`.
-    pub fn with_secret<T: IntoFr, R: Rng>(secret: T, degree: usize, rng: &mut R) -> Self {
+    pub fn with_secret<T: Into<Scalar>, R: Rng>(secret: T, degree: usize, rng: &mut R) -> Self {
         let mut bipoly: BivarPoly = BivarPoly::random(degree, rng);
         let mut coeff = bipoly.coeff.clone();
         coeff[0] = secret.into_fr();
@@ -609,7 +603,7 @@ impl BivarPoly {
             .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: repeat_with(|| Fr::random(rng)).take(len).collect(),
+            coeff: repeat_with(|| Scalar::random(rng)).take(len).collect(),
         };
         Ok(poly)
     }
@@ -620,11 +614,11 @@ impl BivarPoly {
     }
 
     /// Returns the polynomial's value at the point `(x, y)`.
-    pub fn evaluate<T: IntoFr>(&self, x: T, y: T) -> Fr {
+    pub fn evaluate<T: Into<Scalar>>(&self, x: T, y: T) -> Scalar {
         let x_pow = self.powers(x);
         let y_pow = self.powers(y);
         // TODO: Can we save a few multiplication steps here due to the symmetry?
-        let mut result = Fr::zero();
+        let mut result = Scalar::zero();
         for (i, x_pow_i) in x_pow.into_iter().enumerate() {
             for (j, y_pow_j) in y_pow.iter().enumerate() {
                 let index = coeff_pos(i, j).expect("polynomial degree too high");
@@ -638,12 +632,12 @@ impl BivarPoly {
     }
 
     /// Returns the `x`-th row, as a univariate polynomial.
-    pub fn row<T: IntoFr>(&self, x: T) -> Poly {
+    pub fn row<T: Into<Scalar>>(&self, x: T) -> Poly {
         let x_pow = self.powers(x);
-        let coeff: Vec<Fr> = (0..=self.degree)
+        let coeff: Vec<Scalar> = (0..=self.degree)
             .map(|i| {
                 // TODO: clear these secrets from the stack.
-                let mut result = Fr::zero();
+                let mut result = Scalar::zero();
                 for (j, x_pow_j) in x_pow.iter().enumerate() {
                     let index = coeff_pos(i, j).expect("polynomial degree too high");
                     let mut summand = self.coeff[index];
@@ -658,7 +652,7 @@ impl BivarPoly {
 
     /// Returns the corresponding commitment. That information can be shared publicly.
     pub fn commitment(&self) -> BivarCommitment {
-        let to_pub = |c: &Fr| G1Affine::one().mul(*c);
+        let to_pub = |c: &Scalar| G1Affine::one().mul(*c);
         BivarCommitment {
             degree: self.degree,
             coeff: self.coeff.iter().map(to_pub).collect(),
@@ -666,7 +660,7 @@ impl BivarPoly {
     }
 
     /// Returns the `0`-th to `degree`-th power of `x`.
-    fn powers<T: IntoFr>(&self, x: T) -> Vec<Fr> {
+    fn powers<T: Into<Scalar>>(&self, x: T) -> Vec<Scalar> {
         powers(x, self.degree)
     }
 
@@ -687,7 +681,7 @@ pub struct BivarCommitment {
     /// The polynomial's degree in each of the two variables.
     pub(crate) degree: usize,
     /// The commitments to the coefficients.
-    pub(crate) coeff: Vec<G1>,
+    pub(crate) coeff: Vec<G1Projective>,
 }
 
 impl Hash for BivarCommitment {
@@ -724,11 +718,11 @@ impl BivarCommitment {
     }
 
     /// Returns the commitment's value at the point `(x, y)`.
-    pub fn evaluate<T: IntoFr>(&self, x: T, y: T) -> G1 {
+    pub fn evaluate<T: Into<Scalar>>(&self, x: T, y: T) -> G1Projective {
         let x_pow = self.powers(x);
         let y_pow = self.powers(y);
         // TODO: Can we save a few multiplication steps here due to the symmetry?
-        let mut result = G1::zero();
+        let mut result = G1Projective::zero();
         for (i, x_pow_i) in x_pow.into_iter().enumerate() {
             for (j, y_pow_j) in y_pow.iter().enumerate() {
                 let index = coeff_pos(i, j).expect("polynomial degree too high");
@@ -742,11 +736,11 @@ impl BivarCommitment {
     }
 
     /// Returns the `x`-th row, as a commitment to a univariate polynomial.
-    pub fn row<T: IntoFr>(&self, x: T) -> Commitment {
+    pub fn row<T: Into<Scalar>>(&self, x: T) -> Commitment {
         let x_pow = self.powers(x);
-        let coeff: Vec<G1> = (0..=self.degree)
+        let coeff: Vec<G1Projective> = (0..=self.degree)
             .map(|i| {
-                let mut result = G1::zero();
+                let mut result = G1Projective::zero();
                 for (j, x_pow_j) in x_pow.iter().enumerate() {
                     let index = coeff_pos(i, j).expect("polynomial degree too high");
                     let mut summand = self.coeff[index];
@@ -760,7 +754,7 @@ impl BivarCommitment {
     }
 
     /// Returns the `0`-th to `degree`-th power of `x`.
-    fn powers<T: IntoFr>(&self, x: T) -> Vec<Fr> {
+    fn powers<T: Into<Scalar>>(&self, x: T) -> Vec<Scalar> {
         powers(x, self.degree)
     }
 
@@ -776,9 +770,9 @@ impl BivarCommitment {
 }
 
 /// Returns the `0`-th to `degree`-th power of `x`.
-fn powers<T: IntoFr>(into_x: T, degree: usize) -> Vec<Fr> {
+fn powers<T: Into<Scalar>>(into_x: T, degree: usize) -> Vec<Scalar> {
     let x = into_x.into_fr();
-    let mut x_pow_i = Fr::one();
+    let mut x_pow_i = Scalar::one();
     iter::once(x_pow_i)
         .chain((0..degree).map(|_| {
             x_pow_i.mul_assign(&x);
@@ -799,11 +793,9 @@ pub(crate) fn coeff_pos(i: usize, j: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-
-    use super::{coeff_pos, BivarPoly, IntoFr, Poly};
-    use super::{Fr, G1Affine, G1};
+    use bls12_381::{Scalar, G1Affine};
+    use super::{coeff_pos, BivarPoly, Poly};
     use ff::Field;
-    use group::{CurveAffine, CurveProjective};
     use zeroize::Zeroize;
 
     #[test]
@@ -830,7 +822,7 @@ mod tests {
         let x_pow_1 = Poly::monomial(1);
         let poly = x_pow_3 * 5 + x_pow_1 - 2;
 
-        let coeff: Vec<_> = [-2, 1, 0, 5].iter().map(IntoFr::into_fr).collect();
+        let coeff: Vec<_> = [-2, 1, 0, 5].iter().map(into_fr).collect();
         assert_eq!(Poly { coeff }, poly);
         let samples = vec![(-1, -8), (2, 40), (3, 136), (5, 628)];
         for &(x, y) in &samples {
@@ -864,8 +856,8 @@ mod tests {
         assert_ne!(random_commitment, zero_commitment);
 
         let mut rng = rand::thread_rng();
-        let (x, y): (Fr, Fr) = (Fr::random(&mut rng), Fr::random(&mut rng));
-        assert_eq!(zero_commitment.evaluate(x, y), G1::zero());
+        let (x, y): (Scalar, Scalar) = (Scalar::random(&mut rng), Scalar::random(&mut rng));
+        assert_eq!(zero_commitment.evaluate(x, y), G1Projective::zero());
     }
 
     #[test]
@@ -883,7 +875,7 @@ mod tests {
             .collect();
         let pub_bi_commits: Vec<_> = bi_polys.iter().map(BivarPoly::commitment).collect();
 
-        let mut sec_keys = vec![Fr::zero(); node_num];
+        let mut sec_keys = vec![Scalar::zero(); node_num];
 
         // Each dealer sends row `m` to node `m`, where the index starts at `1`. Don't send row `0`
         // to anyone! The nodes verify their rows, and send _value_ `s` on to node `s`. They again
@@ -926,7 +918,7 @@ mod tests {
 
                 // The node sums up all values number `0` it received from the different dealer. No
                 // dealer and no other node knows the sum in the end.
-                sec_keys[m - 1].add_assign(&my_row.evaluate(Fr::zero()));
+                sec_keys[m - 1].add_assign(&my_row.evaluate(Scalar::zero()));
             }
         }
 

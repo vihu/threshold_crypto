@@ -2,11 +2,12 @@
 //! memory with zeros.
 
 use bls12_381::Scalar as Fr;
+use ff::PrimeFieldRepr as FrRepr;
 
 /// Overwrites a single field element with zeros.
 pub(crate) fn clear_fr(fr: &mut Fr) {
     // TODO: Remove this after pairing support `Zeroize`
-    let fr_repr = unsafe { &mut *(fr as *mut Fr as *mut FrRepr) };
+    let fr_repr = unsafe { &mut *(fr as *mut Fr as *mut dyn FrRepr) };
     fr_repr.0.zeroize();
 }
 

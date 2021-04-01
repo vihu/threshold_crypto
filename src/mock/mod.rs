@@ -15,7 +15,6 @@ pub mod ms8;
 use std::{fmt, mem, slice};
 
 use ff::{Field, PrimeField, ScalarEngine};
-use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::{Engine, PairingCurveAffine};
 use rand::RngCore;
 
