@@ -15,6 +15,7 @@ pub use ff;
 use ff::Field;
 mod into_fr;
 mod secret;
+mod cmp_pairing;
 
 #[cfg(feature = "codec-support")]
 #[macro_use]
@@ -38,10 +39,12 @@ use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
+use group::{Curve, prime::PrimeCurveAffine};
 
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
+use crate::cmp_pairing::cmp_projective;
 
 use bls12_381::{Scalar, pairing, G1Projective, G2Projective, G1Affine, G2Affine};
 
@@ -111,10 +114,7 @@ impl PublicKey {
 
     /// Returns the key with the given representation, if valid.
     pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let mut compressed: <G1Affine as PrimeCurveAffine>::Compressed = EncodedPoint::empty();
-        compressed.as_mut().copy_from_slice(bytes.borrow());
-        let opt_affine = compressed.into_affine().ok();
-        let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
+        let projective = G1Affine::from_bytes(bytes);
         Ok(PublicKey(projective))
     }
 
@@ -230,10 +230,7 @@ impl Signature {
 
     /// Returns the signature with the given representation, if valid.
     pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let mut compressed: <G2Affine as PrimeCurveAffine>::Compressed = EncodedPoint::empty();
-        compressed.as_mut().copy_from_slice(bytes.borrow());
-        let opt_affine = compressed.into_affine().ok();
-        let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
+        let projective = G1Projective::from_bytes(bytes);
         Ok(Signature(projective))
     }
 

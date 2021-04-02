@@ -30,6 +30,7 @@ use zeroize::Zeroize;
 
 use crate::error::{Error, Result};
 use crate::secret::clear_fr;
+use crate::cmp_pairing::cmp_projective;
 use crate::PublicKey;
 use bls12_381::{Scalar, G1Projective, G1Affine};
 
