@@ -20,7 +20,8 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.3.4"
-ff = "0.6.0"
+# ff = "0.6.0"
+ff = { path = "/home/rahul/dev/ff" }
 group = "0.9.0"
 hex_fmt = "0.3.0"
 log = "0.4.8"

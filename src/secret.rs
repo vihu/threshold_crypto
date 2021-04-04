@@ -14,8 +14,8 @@ pub(crate) fn clear_fr(fr: &mut Fr) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ff::Field;
     use rand::thread_rng;
+    use ff::Field;
 
     #[test]
     fn test_clear() {

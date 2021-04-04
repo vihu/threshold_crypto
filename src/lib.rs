@@ -11,8 +11,6 @@
 )]
 #![warn(missing_docs)]
 
-pub use ff;
-use ff::Field;
 mod into_fr;
 mod secret;
 mod cmp_pairing;
@@ -23,7 +21,6 @@ mod codec_impl;
 
 pub mod error;
 pub mod poly;
-pub mod serde_impl;
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -40,6 +37,8 @@ use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 use group::{Curve, prime::PrimeCurveAffine};
+use group::Group;
+use ff::Field;
 
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
@@ -185,7 +184,7 @@ impl PublicKeyShare {
 /// A signature.
 // Note: Random signatures can be generated for testing.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub struct Signature(#[serde(with = "serde_impl::projective")] G2Projective);
+pub struct Signature(G2Projective);
 
 impl PartialOrd for Signature {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -721,7 +720,7 @@ fn xor_with_hash(g1: G1Projective, bytes: &[u8]) -> Vec<u8> {
 /// group generator `g`, returns `f(0) * g`.
 fn interpolate<C, B, T, I>(t: usize, items: I) -> Result<C>
 where
-    C: CurveProjective,
+    C: Curve,
     I: IntoIterator<Item = (T, B)>,
     T: Into<Scalar>,
     B: Borrow<C>,
