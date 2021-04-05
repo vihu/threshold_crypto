@@ -111,16 +111,14 @@ impl PublicKey {
     }
 
     /// Returns the key with the given representation, if valid.
-    pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let projective = G1Projective::from_bytes(bytes);
-        Ok(PublicKey(projective))
+    pub fn from_bytes(bytes: [u8; PK_SIZE]) -> FromBytesResult<Self> {
+        let g1_affine = G1Affine::from_compressed(&bytes).unwrap();
+        Ok(PublicKey(G1Projective::from(g1_affine)))
     }
 
     /// Returns a byte string representation of the public key.
     pub fn to_bytes(&self) -> [u8; PK_SIZE] {
-        let mut bytes = [0u8; PK_SIZE];
-        bytes.copy_from_slice(self.0.into_affine().into_compressed().as_ref());
-        bytes
+        G1Affine::from(self.0).to_compressed()
     }
 
     /// Generates a non-redacted debug string.
@@ -136,7 +134,7 @@ pub struct PublicKeyShare(PublicKey);
 
 impl fmt::Debug for PublicKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let uncomp = (self.0).0.into_affine().into_uncompressed();
+        let uncomp = G1Affine::from((self.0).0).to_uncompressed();
         write!(f, "PublicKeyShare({:0.10})", HexFmt(uncomp))
     }
 }
@@ -163,7 +161,7 @@ impl PublicKeyShare {
     }
 
     /// Returns the key share with the given representation, if valid.
-    pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+    pub fn from_bytes(bytes: [u8; PK_SIZE]) -> FromBytesResult<Self> {
         Ok(PublicKeyShare(PublicKey::from_bytes(bytes)?))
     }
 
@@ -205,21 +203,21 @@ impl Distribution<Signature> for Standard {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let uncomp = self.0.into_affine().into_uncompressed();
+        let uncomp = G2Affine::from(self.0).to_uncompressed();
         write!(f, "Signature({:0.10})", HexFmt(uncomp))
     }
 }
 
 impl Hash for Signature {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.into_affine().into_compressed().as_ref().hash(state);
+        G2Affine::from(self.0).to_compressed().as_ref().hash(state);
     }
 }
 
 impl Signature {
     /// Returns `true` if the signature contains an odd number of ones.
     pub fn parity(&self) -> bool {
-        let uncomp = self.0.into_affine().into_uncompressed();
+        let uncomp = G2Affine::from(self.0).to_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
         let parity = 0 != xor_bytes.count_ones() % 2;
         debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
@@ -227,16 +225,14 @@ impl Signature {
     }
 
     /// Returns the signature with the given representation, if valid.
-    pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let projective = G1Projective::from_bytes(bytes);
-        Ok(Signature(projective))
+    pub fn from_bytes(bytes: [u8; SIG_SIZE]) -> FromBytesResult<Self> {
+        let g2_affine = G2Affine::from_compressed(&bytes).unwrap();
+        Ok(Signature(G2Projective::from(g2_affine)))
     }
 
     /// Returns a byte string representation of the signature.
     pub fn to_bytes(&self) -> [u8; SIG_SIZE] {
-        let mut bytes = [0u8; SIG_SIZE];
-        bytes.copy_from_slice(self.0.into_affine().into_compressed().as_ref());
-        bytes
+        G2Affine::from(self.0).to_compressed()
     }
 }
 
@@ -254,14 +250,14 @@ impl Distribution<SignatureShare> for Standard {
 
 impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let uncomp = (self.0).0.into_affine().into_uncompressed();
+        let uncomp = G2Affine::from((self.0).0).to_uncompressed();
         write!(f, "SignatureShare({:0.10})", HexFmt(uncomp))
     }
 }
 
 impl SignatureShare {
     /// Returns the signature share with the given representation, if valid.
-    pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+    pub fn from_bytes(bytes: [u8; SIG_SIZE]) -> FromBytesResult<Self> {
         Ok(SignatureShare(Signature::from_bytes(bytes)?))
     }
 
@@ -469,9 +465,9 @@ pub struct Ciphertext(G1Projective, Vec<u8>, G2Projective);
 impl Hash for Ciphertext {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let Ciphertext(ref u, ref v, ref w) = *self;
-        u.into_affine().into_compressed().as_ref().hash(state);
+        G1Affine::from(u).to_compressed().as_ref().hash(state);
         v.hash(state);
-        w.into_affine().into_compressed().as_ref().hash(state);
+        G2Affine::from(w).to_compressed().as_ref().hash(state);
     }
 }
 
@@ -497,7 +493,7 @@ impl Ciphertext {
     pub fn verify(&self) -> bool {
         let Ciphertext(ref u, ref v, ref w) = *self;
         let hash = hash_g1_g2(*u, v);
-        pairing(G1Affine::one(), *w) == pairing(*u, hash)
+        pairing(&G1Affine::identity(), &G2Affine::from(*w)) == pairing(&G1Affine::from(*u), &G2Affine::from(hash))
     }
 }
 
@@ -513,7 +509,7 @@ impl Distribution<DecryptionShare> for Standard {
 
 impl Hash for DecryptionShare {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.into_affine().into_compressed().as_ref().hash(state);
+        G1Affine::from(self.0).to_compressed().as_ref().hash(state);
     }
 }
 
@@ -663,7 +659,7 @@ impl SecretKeySet {
     }
 
     /// Returns the `i`-th secret key share.
-    pub fn secret_key_share<T: Into<Scalar>>(&self, i: T) -> SecretKeyShare {
+    pub fn secret_key_share(&self, i: Scalar) -> SecretKeyShare {
         let mut fr = self.poly.evaluate(i + Scalar::one());
         SecretKeyShare::from_mut(&mut fr)
     }
@@ -698,13 +694,13 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1Projective, msg: M) -> G2Projective {
     } else {
         msg.as_ref().to_vec()
     };
-    msg.extend(g1.into_affine().into_compressed().as_ref());
+    msg.extend(G1Affine::from(g1).to_compressed().as_ref());
     hash_g2(&msg)
 }
 
 /// Returns the bitwise xor of `bytes` with a sequence of pseudorandom bytes determined by `g1`.
 fn xor_with_hash(g1: G1Projective, bytes: &[u8]) -> Vec<u8> {
-    let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
+    let digest = sha3_256(G1Affine::from(g1).to_compressed().as_ref());
     let rng = ChaChaRng::from_seed(digest);
     let xor = |(a, b): (u8, &u8)| a ^ b;
     rng.sample_iter(&Standard).zip(bytes).map(xor).collect()
