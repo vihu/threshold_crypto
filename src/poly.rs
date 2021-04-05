@@ -37,8 +37,7 @@ use bls12_381::{Scalar, G1Projective, G1Affine};
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Poly {
-    /// The coefficients of a polynomial.
-    pub(super) coeff: Vec<Scalar>,
+    pub coeff: Vec<Scalar>,
 }
 
 impl Zeroize for Poly {

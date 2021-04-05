@@ -11,9 +11,8 @@
 )]
 #![warn(missing_docs)]
 
-mod into_fr;
-mod secret;
 mod cmp_pairing;
+mod secret;
 
 #[cfg(feature = "codec-support")]
 #[macro_use]
@@ -22,13 +21,15 @@ mod codec_impl;
 pub mod error;
 pub mod poly;
 
+use core::ops::{Add, AddAssign};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::vec::Vec;
-use core::ops::{Add, AddAssign};
 
+use ff::Field;
+use group::{prime::PrimeCurveAffine, Curve, Group, GroupEncoding};
 use hex_fmt::HexFmt;
 use log::debug;
 use rand::distributions::{Distribution, Standard};
@@ -36,15 +37,13 @@ use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use group::{Group, GroupEncoding, Curve, prime::PrimeCurveAffine};
-use ff::Field;
 
+use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
-use crate::cmp_pairing::cmp_projective;
 
-use bls12_381::{Scalar, pairing, G1Projective, G2Projective, G1Affine, G2Affine};
+use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 
 mod util;
 use util::sha3_256;
@@ -80,7 +79,8 @@ impl fmt::Debug for PublicKey {
 impl PublicKey {
     /// Returns `true` if the signature matches the element of `G2`.
     pub fn verify_g2(&self, sig: &Signature, hash: &G2Affine) -> bool {
-        pairing(&G1Affine::from(self.0), hash) == pairing(&G1Affine::identity(), &G2Affine::from(sig.0))
+        pairing(&G1Affine::from(self.0), hash)
+            == pairing(&G1Affine::identity(), &G2Affine::from(sig.0))
     }
 
     /// Returns `true` if the signature matches the message.
@@ -143,22 +143,23 @@ impl fmt::Debug for PublicKeyShare {
 
 impl PublicKeyShare {
     /// Returns `true` if the signature matches the element of `G2`.
-    pub fn verify_g2<H: Into<G2Affine>>(&self, sig: &SignatureShare, hash: H) -> bool {
-        self.0.verify_g2(&sig.0, hash)
+    pub fn verify_g2(&self, sig: &SignatureShare, hash: G2Affine) -> bool {
+        self.0.verify_g2(&sig.0, &hash)
     }
 
     /// Returns `true` if the signature matches the message.
     ///
     /// This is equivalent to `verify_g2(sig, hash_g2(msg))`.
     pub fn verify<M: AsRef<[u8]>>(&self, sig: &SignatureShare, msg: M) -> bool {
-        self.verify_g2(sig, hash_g2(msg))
+        self.verify_g2(sig, G2Affine::from(hash_g2(msg)))
     }
 
     /// Returns `true` if the decryption share matches the ciphertext.
     pub fn verify_decryption_share(&self, share: &DecryptionShare, ct: &Ciphertext) -> bool {
         let Ciphertext(ref u, ref v, ref w) = *ct;
         let hash = hash_g1_g2(*u, v);
-        pairing(share.0, hash) == pairing((self.0).0, *w)
+        pairing(&G1Affine::from(share.0), &G2Affine::from(hash))
+            == pairing(&G1Affine::from((self.0).0), &G2Affine::from(*w))
     }
 
     /// Returns the key share with the given representation, if valid.
@@ -177,7 +178,6 @@ impl PublicKeyShare {
         commit.add_assign(&other.0.clone().0);
         PublicKeyShare(PublicKey(commit))
     }
-
 }
 
 /// A signature.
@@ -346,19 +346,19 @@ impl SecretKey {
 
     /// Returns the matching public key.
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(G1Affine::one().mul(self.0))
+        PublicKey(G1Affine::identity() * self.0)
     }
 
     /// Signs the given element of `G2`.
-    pub fn sign_g2<H: Into<G2Affine>>(&self, hash: H) -> Signature {
-        Signature(hash.into().mul(self.0))
+    pub fn sign_g2(&self, hash: G2Affine) -> Signature {
+        Signature(hash * self.0)
     }
 
     /// Signs the given message.
     ///
     /// This is equivalent to `sign_g2(hash_g2(msg))`.
     pub fn sign<M: AsRef<[u8]>>(&self, msg: M) -> Signature {
-        self.sign_g2(hash_g2(msg))
+        self.sign_g2(G2Affine::from(hash_g2(msg)))
     }
 
     /// Returns the decrypted text, or `None`, if the ciphertext isn't valid.
@@ -367,7 +367,7 @@ impl SecretKey {
             return None;
         }
         let Ciphertext(ref u, ref v, _) = *ct;
-        let g = u.into_affine().mul(self.0);
+        let g = G1Affine::from(u) * self.0;
         Some(xor_with_hash(g, v))
     }
 
@@ -432,7 +432,7 @@ impl SecretKeyShare {
     }
 
     /// Signs the given element of `G2`.
-    pub fn sign_g2<H: Into<G2Affine>>(&self, hash: H) -> SignatureShare {
+    pub fn sign_g2(&self, hash: G2Affine) -> SignatureShare {
         SignatureShare(self.0.sign_g2(hash))
     }
 
@@ -451,7 +451,7 @@ impl SecretKeyShare {
 
     /// Returns a decryption share, without validating the ciphertext.
     pub fn decrypt_share_no_verify(&self, ct: &Ciphertext) -> DecryptionShare {
-        DecryptionShare(ct.0.into_affine().mul((self.0).0))
+        DecryptionShare(G1Affine::from(ct.0) * (self.0).0)
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -464,11 +464,7 @@ impl SecretKeyShare {
 
 /// An encrypted message.
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-pub struct Ciphertext(
-    G1Projective,
-    Vec<u8>,
-    G2Projective,
-);
+pub struct Ciphertext(G1Projective, Vec<u8>, G2Projective);
 
 impl Hash for Ciphertext {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -622,9 +618,8 @@ impl PublicKeySet {
     pub fn combine(&self, other: PublicKeySet) -> PublicKeySet {
         let mut commit = self.commit.clone();
         commit.add_assign(&other.commit);
-        PublicKeySet{ commit }
+        PublicKeySet { commit }
     }
-
 }
 
 /// A secret key and an associated set of secret key shares.
