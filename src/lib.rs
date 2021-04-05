@@ -36,8 +36,7 @@ use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use group::{Curve, prime::PrimeCurveAffine};
-use group::Group;
+use group::{Group, GroupEncoding, Curve, prime::PrimeCurveAffine};
 use ff::Field;
 
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
@@ -88,7 +87,7 @@ impl PublicKey {
     ///
     /// This is equivalent to `verify_g2(sig, hash_g2(msg))`.
     pub fn verify<M: AsRef<[u8]>>(&self, sig: &Signature, msg: M) -> bool {
-        self.verify_g2(sig, hash_g2(msg))
+        self.verify_g2(sig, &G2Affine::from(hash_g2(msg)))
     }
 
     /// Encrypts the message using the OS random number generator.
@@ -102,18 +101,18 @@ impl PublicKey {
     /// Encrypts the message.
     pub fn encrypt_with_rng<R: RngCore, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
         let r: Scalar = Scalar::random(rng);
-        let u = G1Affine::one().mul(r);
+        let u = G1Affine::identity() * r;
         let v: Vec<u8> = {
-            let g = self.0.into_affine().mul(r);
+            let g = G1Projective::from(self.0) * r;
             xor_with_hash(g, msg.as_ref())
         };
-        let w = hash_g1_g2(u, &v).into_affine().mul(r);
+        let w = G2Projective::from(hash_g1_g2(u, &v)) * r;
         Ciphertext(u, v, w)
     }
 
     /// Returns the key with the given representation, if valid.
     pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
-        let projective = G1Affine::from_bytes(bytes);
+        let projective = G1Projective::from_bytes(bytes);
         Ok(PublicKey(projective))
     }
 
