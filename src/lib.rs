@@ -29,17 +29,17 @@ use std::hash::{Hash, Hasher};
 use std::vec::Vec;
 
 use ff::Field;
-use group::{prime::PrimeCurveAffine, Curve, Group, GroupEncoding};
+use group::{Curve, Group};
 use hex_fmt::HexFmt;
 use log::debug;
 use rand::distributions::{Distribution, Standard};
-use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
+use rand::{rngs::OsRng, Rng, RngCore};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
-use crate::error::{Error, FromBytesError, FromBytesResult, Result};
+use crate::error::{Error, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
 
@@ -493,7 +493,8 @@ impl Ciphertext {
     pub fn verify(&self) -> bool {
         let Ciphertext(ref u, ref v, ref w) = *self;
         let hash = hash_g1_g2(*u, v);
-        pairing(&G1Affine::identity(), &G2Affine::from(*w)) == pairing(&G1Affine::from(*u), &G2Affine::from(hash))
+        pairing(&G1Affine::identity(), &G2Affine::from(*w))
+            == pairing(&G1Affine::from(*u), &G2Affine::from(hash))
     }
 }
 
