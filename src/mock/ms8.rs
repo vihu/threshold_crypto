@@ -278,7 +278,7 @@ impl PrimeField for Mersenne8 {
     }
 
     #[inline]
-    fn into_repr(&self) -> Self::Repr {
+    fn to_repr(&self) -> Self::Repr {
         *self
     }
 
