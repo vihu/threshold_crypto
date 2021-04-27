@@ -35,13 +35,17 @@ use log::debug;
 use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, RngCore};
 use rand_chacha::ChaChaRng;
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
+extern crate serde_big_array;
+use serde_big_array::big_array;
+
+big_array! {BigArray; }
 
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 
@@ -61,7 +65,75 @@ pub const SIG_SIZE: usize = 96;
 
 /// A public key.
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct PublicKey(G1Projective);
+pub struct PublicKey(G1Affine);
+
+#[derive(Serialize, Deserialize)]
+struct SerializedPublicKey {
+    #[serde(with = "BigArray")]
+    bytes: [u8; PK_SIZE],
+}
+
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = SerializedPublicKey {
+            bytes: self.0.to_compressed(),
+        };
+        serializer.serialize_newtype_struct("PublicKey", &bytes)
+    }
+}
+
+struct PublicKeyVisitor;
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_newtype_struct("PublicKey", PublicKeyVisitor)
+    }
+}
+
+impl<'de> Visitor<'de> for PublicKeyVisitor {
+    type Value = PublicKey;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "fuck your pubkey serialization")
+    }
+
+    fn visit_newtype_struct<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_u8(self)
+    }
+
+    // fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+    // where
+    //     M: MapAccess<'de>,
+    // {
+    //     let mut first = None;
+    //     let mut second = None;
+
+    //     while let Some(k) = map.next_key::<&str>()? {
+    //         if k == "first" {
+    //             first = Some(map.next_value()?);
+    //         } else if k == "second" {
+    //             second = Some(map.next_value()?);
+    //         } else {
+    //             return Err(serde::de::Error::custom(&format!("Invalid key: {}", k)));
+    //         }
+    //     }
+
+    //     if first.is_none() || second.is_none() {
+    //         return Err(serde::de::Error::custom("Missing first or second"));
+    //     }
+
+    //     Ok(Custom(first.unwrap(), second.unwrap()))
+    // }
+}
 
 impl Hash for PublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
